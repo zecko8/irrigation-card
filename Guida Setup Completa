@@ -1,0 +1,231 @@
+# Guida Setup Completa - Irrigation Card
+
+## Passo 1: Preparazione del Sistema
+
+### Installa Node.js e npm
+```bash
+# Ubuntu/Debian
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verifica installazione
+node --version
+npm --version
+```
+
+### Installa Git (se non presente)
+```bash
+sudo apt update
+sudo apt install git
+```
+
+## Passo 2: Creazione del Repository
+
+### Crea account GitHub (se non presente)
+1. Vai su https://github.com
+2. Registrati o accedi
+3. Crea nuovo repository "irrigation-card"
+4. Impostalo come pubblico
+5. Non aggiungere README, .gitignore o licenza (li creeremo noi)
+
+### Clona e inizializza il progetto
+```bash
+# Sostituisci TUOUSERNAME con il tuo username GitHub
+git clone https://github.com/TUOUSERNAME/irrigation-card.git
+cd irrigation-card
+
+# Inizializza npm
+npm init -y
+```
+
+## Passo 3: Creazione Struttura Directory
+
+```bash
+# Crea le directory necessarie
+mkdir -p src dist assets
+
+# Struttura finale
+# irrigation-card/
+# ├── src/
+# ├── dist/
+# ├── assets/
+# ├── package.json (già creato)
+# └── altri file che creeremo
+```
+
+## Passo 4: Creazione dei File
+
+### Copia tutti i file degli artifacts precedenti:
+
+1. **package.json** - Sostituisci il contenuto con quello dell'artifact
+2. **rollup.config.js** - Crea nuovo file
+3. **hacs.json** - Crea nuovo file  
+4. **.gitignore** - Crea nuovo file
+5. **src/api.js** - Crea nuovo file
+6. **src/styles.js** - Crea nuovo file  
+7. **src/editor.js** - Crea nuovo file
+8. **src/irrigation-card.js** - Crea nuovo file
+9. **README.md** - Crea nuovo file
+10. **info.md** - Crea nuovo file
+
+### Comando per creare rapidamente i file:
+```bash
+# Crea i file vuoti
+touch rollup.config.js hacs.json .gitignore README.md info.md
+touch src/api.js src/styles.js src/editor.js src/irrigation-card.js
+
+# Ora copia il contenuto degli artifacts in ogni file
+```
+
+## Passo 5: Installazione Dipendenze
+
+```bash
+# Installa dipendenze di sviluppo e produzione
+npm install
+
+# Se ci sono errori, forza la reinstallazione
+rm -rf node_modules package-lock.json
+npm install
+```
+
+## Passo 6: Build del Progetto
+
+```bash
+# Build di produzione
+npm run build
+
+# Verifica che sia stato creato dist/irrigation-card.js
+ls -la dist/
+
+# Per sviluppo con watch
+npm run watch
+```
+
+## Passo 7: Test Locale (Opzionale)
+
+### Copia il file in Home Assistant per test
+```bash
+# Sostituisci con il path del tuo Home Assistant
+cp dist/irrigation-card.js /path/to/homeassistant/config/www/
+
+# Oppure se HA è su altro server
+scp dist/irrigation-card.js user@ha-server:/config/www/
+```
+
+### Aggiungi risorsa in Home Assistant
+1. Configuration → Lovelace Dashboards → Resources
+2. Aggiungi URL: `/local/irrigation-card.js`
+3. Tipo: JavaScript Module
+
+## Passo 8: Preparazione per GitHub Release
+
+### Aggiungi tutti i file a Git
+```bash
+# Controlla stato
+git status
+
+# Aggiungi tutti i file
+git add .
+
+# Commit iniziale
+git commit -m "Initial commit - Irrigation Card v1.0.0"
+
+# Push al repository
+git push origin main
+```
+
+### Crea un Release
+1. Vai su GitHub nel tuo repository
+2. Clicca su "Releases" → "Create a new release"
+3. Tag version: `v1.0.0`
+4. Release title: `v1.0.0 - Initial Release`
+5. Descrizione: copia il changelog dal README
+6. Allega il file `dist/irrigation-card.js`
+7. Pubblica il release
+
+## Passo 9: Preparazione Assets per HACS
+
+### Crea un'icona (opzionale)
+```bash
+# Scarica o crea un'icona 512x512 px
+# Salvala come assets/icon.png
+
+# Crea uno screenshot
+# Salvalo come assets/screenshot.png
+```
+
+### Aggiorna i file se necessario
+```bash
+# Se hai fatto modifiche
+git add .
+git commit -m "Add assets and documentation"
+git push origin main
+```
+
+## Passo 10: Installazione in Home Assistant
+
+### Via HACS Custom Repository
+1. HACS → Frontend → Menu (3 punti) → Custom repositories
+2. URL: `https://github.com/TUOUSERNAME/irrigation-card`
+3. Categoria: "Lovelace"
+4. Aggiungi
+5. Cerca "Irrigation Card" e installa
+
+### Uso della Card
+1. Dashboard → Modifica → Aggiungi Card
+2. Cerca "Irrigation Card"
+3. Configura URL, username, password del tuo backend
+4. Salva
+
+## Passo 11: Debug e Troubleshooting
+
+### Log del Browser
+```bash
+# Apri Developer Tools (F12)
+# Guarda Console per errori JavaScript
+# Verifica Network tab per chiamate API
+```
+
+### Log di Home Assistant
+```bash
+# Controlla i log di HA per errori
+# Configuration → Logs
+```
+
+### Test API Backend
+```bash
+# Testa manualmente le API del backend
+curl -X GET "https://your-backend:5000/api/valves" \
+  -H "Authorization: Basic $(echo -n 'username:password' | base64)" \
+  -k
+
+# Verifica che risponda correttamente
+```
+
+## Note Importanti
+
+1. **HTTPS**: Il backend deve usare HTTPS per funzionare con Home Assistant
+2. **CORS**: Se hai problemi di CORS, potresti dover configurare il backend
+3. **Credenziali**: Non committare mai credenziali reali nei file di configurazione
+4. **Username GitHub**: Ricordati di sostituire "TUOUSERNAME" con il tuo username effettivo
+
+## Comandi Utili per Sviluppo
+
+```bash
+# Watch mode per sviluppo
+npm run watch
+
+# Build di produzione
+npm run build
+
+# Verifica sintassi
+npx eslint src/
+
+# Test build
+npm run build && echo "Build successful!"
+
+# Aggiorna versione
+npm version patch  # 1.0.0 → 1.0.1
+npm version minor  # 1.0.1 → 1.1.0
+npm version major  # 1.1.0 → 2.0.0
+```
