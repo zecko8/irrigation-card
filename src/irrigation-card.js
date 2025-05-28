@@ -12,7 +12,9 @@ class IrrigationCard extends LitElement {
       systemStatus: { type: Object },
       loading: { type: Boolean },
       error: { type: String },
-      lastUpdate: { type: Number }
+      lastUpdate: { type: Number },
+      editingSchedule: { type: Object }, // { valveId: number, day: string }
+      scheduleForm: { type: Object } // Form data per l'editing
     };
   }
 
@@ -29,6 +31,8 @@ class IrrigationCard extends LitElement {
     this.lastUpdate = 0;
     this.refreshInterval = null;
     this.api = null;
+    this.editingSchedule = null;
+    this.scheduleForm = {};
   }
 
   setConfig(config) {
@@ -103,10 +107,15 @@ class IrrigationCard extends LitElement {
       this.loading = true;
       this.error = null;
 
+      console.log('Loading data from:', this.config.url);
+      
       const [valvesResponse, systemResponse] = await Promise.all([
         this.api.getValves(),
         this.api.getSystemStatus()
       ]);
+
+      console.log('Valves response:', valvesResponse);
+      console.log('System response:', systemResponse);
 
       this.valves = valvesResponse.data || [];
       this.systemStatus = systemResponse.data || null;
@@ -114,6 +123,11 @@ class IrrigationCard extends LitElement {
       
     } catch (error) {
       console.error('Errore nel caricamento dei dati:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        url: this.config.url
+      });
       this.error = `Errore di connessione: ${error.message}`;
     } finally {
       this.loading = false;
@@ -146,6 +160,79 @@ class IrrigationCard extends LitElement {
       await this._loadData();
     } catch (error) {
       console.error('Errore nell\'impostazione skip next:', error);
+      this.error = `Errore: ${error.message}`;
+    }
+  }
+
+  _openScheduleEditor(valveId, day) {
+    const valve = this.valves.find(v => v.id === valveId);
+    if (!valve) return;
+
+    this.editingSchedule = { valveId, day };
+    
+    // Carica la programmazione esistente o crea una vuota
+    const existingSchedule = valve.schedule[day] || [];
+    this.scheduleForm = {
+      schedules: existingSchedule.length > 0 ? 
+        [...existingSchedule] : 
+        [{ start_time: '06:00', duration: 10 }]
+    };
+  }
+
+  _closeScheduleEditor() {
+    this.editingSchedule = null;
+    this.scheduleForm = {};
+  }
+
+  _addScheduleEntry() {
+    if (!this.scheduleForm.schedules) this.scheduleForm.schedules = [];
+    
+    if (this.scheduleForm.schedules.length < 5) {
+      this.scheduleForm.schedules.push({
+        start_time: '06:00',
+        duration: 10
+      });
+      this.requestUpdate();
+    }
+  }
+
+  _removeScheduleEntry(index) {
+    if (this.scheduleForm.schedules && this.scheduleForm.schedules.length > index) {
+      this.scheduleForm.schedules.splice(index, 1);
+      this.requestUpdate();
+    }
+  }
+
+  _updateScheduleEntry(index, field, value) {
+    if (this.scheduleForm.schedules && this.scheduleForm.schedules[index]) {
+      this.scheduleForm.schedules[index][field] = field === 'duration' ? parseInt(value) : value;
+      this.requestUpdate();
+    }
+  }
+
+  async _saveSchedule() {
+    if (!this.editingSchedule || !this.scheduleForm.schedules) return;
+
+    try {
+      // Valida i dati
+      for (const entry of this.scheduleForm.schedules) {
+        if (!entry.start_time || !entry.duration || entry.duration < 1 || entry.duration > 60) {
+          this.error = 'Dati non validi: orario richiesto e durata 1-60 minuti';
+          return;
+        }
+      }
+
+      await this.api.updateSchedule(
+        this.editingSchedule.valveId,
+        this.editingSchedule.day,
+        this.scheduleForm.schedules
+      );
+      
+      await this._loadData();
+      this._closeScheduleEditor();
+      
+    } catch (error) {
+      console.error('Errore nel salvataggio della programmazione:', error);
       this.error = `Errore: ${error.message}`;
     }
   }
@@ -290,14 +377,18 @@ class IrrigationCard extends LitElement {
               <div class="valve-schedule">
                 <div class="schedule-title">Programmazione Settimanale</div>
                 <div class="schedule-days">
-                  ${this._getScheduleInfo(valve).map(day => html`
-                    <span 
-                      class="schedule-day ${day.hasSchedule ? '' : 'empty'}"
-                      title="${day.hasSchedule ? `${day.count} accensioni` : 'Nessuna programmazione'}"
-                    >
-                      ${day.name}${day.hasSchedule ? ` (${day.count})` : ''}
-                    </span>
-                  `)}
+                  ${this._getScheduleInfo(valve).map((day, index) => {
+                    const dayName = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][index];
+                    return html`
+                      <span 
+                        class="schedule-day ${day.hasSchedule ? '' : 'empty'}"
+                        title="${day.hasSchedule ? `${day.count} accensioni - Clicca per modificare` : 'Nessuna programmazione - Clicca per aggiungere'}"
+                        @click="${() => this._openScheduleEditor(valve.id, dayName)}"
+                      >
+                        ${day.name}${day.hasSchedule ? ` (${day.count})` : ''}
+                      </span>
+                    `;
+                  })}
                 </div>
               </div>
             ` : ''}
@@ -308,6 +399,74 @@ class IrrigationCard extends LitElement {
       ${this.valves.length === 0 ? html`
         <div class="loading">
           <div>Nessuna valvola trovata</div>
+        </div>
+      ` : ''}
+
+      ${this.editingSchedule ? html`
+        <div class="schedule-editor-overlay" @click="${(e) => e.target === e.currentTarget && this._closeScheduleEditor()}">
+          <div class="schedule-editor">
+            <div class="schedule-editor-header">
+              <h3 class="schedule-editor-title">
+                Programmazione ${this.valves.find(v => v.id === this.editingSchedule.valveId)?.name} - 
+                ${['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'][
+                  ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].indexOf(this.editingSchedule.day)
+                ]}
+              </h3>
+            </div>
+
+            <div class="schedule-entries">
+              ${this.scheduleForm.schedules?.map((entry, index) => html`
+                <div class="schedule-entry">
+                  <div class="schedule-entry-field">
+                    <label class="schedule-entry-label">Orario</label>
+                    <input 
+                      type="time" 
+                      class="schedule-entry-input"
+                      .value="${entry.start_time}"
+                      @input="${(e) => this._updateScheduleEntry(index, 'start_time', e.target.value)}"
+                    />
+                  </div>
+                  <div class="schedule-entry-field">
+                    <label class="schedule-entry-label">Durata (min)</label>
+                    <input 
+                      type="number" 
+                      class="schedule-entry-input"
+                      min="1" 
+                      max="60"
+                      .value="${entry.duration}"
+                      @input="${(e) => this._updateScheduleEntry(index, 'duration', e.target.value)}"
+                    />
+                  </div>
+                  <button 
+                    class="schedule-entry-remove" 
+                    @click="${() => this._removeScheduleEntry(index)}"
+                    title="Rimuovi"
+                  >
+                    ×
+                  </button>
+                </div>
+              `) || html`<div>Nessuna programmazione</div>`}
+            </div>
+
+            <div class="schedule-editor-actions">
+              <button 
+                class="add-schedule-btn"
+                @click="${this._addScheduleEntry}"
+                ?disabled="${(this.scheduleForm.schedules?.length || 0) >= 5}"
+              >
+                + Aggiungi orario
+              </button>
+
+              <div class="schedule-editor-buttons">
+                <button class="btn btn-close" @click="${this._closeScheduleEditor}">
+                  Annulla
+                </button>
+                <button class="btn btn-save" @click="${this._saveSchedule}">
+                  Salva
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       ` : ''}
     `;
