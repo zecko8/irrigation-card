@@ -1,0 +1,35 @@
+{
+  "name": "irrigation-card",
+  "version": "1.0.0",
+  "description": "Custom Home Assistant card for irrigation system control",
+  "main": "dist/irrigation-card.js",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w",
+    "serve": "rollup -c -w --environment DEV"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TUOUSERNAME/irrigation-card.git"
+  },
+  "keywords": [
+    "home-assistant",
+    "custom-card",
+    "irrigation",
+    "lovelace"
+  ],
+  "author": "Il tuo nome",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/TUOUSERNAME/irrigation-card/issues"
+  },
+  "homepage": "https://github.com/TUOUSERNAME/irrigation-card#readme",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^4.6.1"
+  },
+  "dependencies": {
+    "lit": "^3.1.0"
+  }
+}
