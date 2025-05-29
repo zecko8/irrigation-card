@@ -141,20 +141,46 @@ export class IrrigationCardEditor extends LitElement {
     this.connectionError = null;
 
     try {
-      // Importa l'API
-      const { IrrigationAPI } = await import('./api.js');
-      const api = new IrrigationAPI(
-        this.config.url, 
-        this.config.username, 
-        this.config.password,
-        {
-          use_http_fallback: this.config.use_http_fallback,
-          ignore_ssl_errors: this.config.ignore_ssl_errors
-        }
-      );
+      // Prova prima una richiesta diretta semplice per testare la connettività
+      const testUrl = `${this.config.url.replace(/\/$/, '')}/api/system/status`;
+      const auth = btoa(`${this.config.username}:${this.config.password}`);
+      
+      console.log('Testing connection to:', testUrl);
+      
+      const testResponse = await fetch(testUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        mode: 'cors',
+        credentials: 'omit'
+      });
 
-      const response = await api.getValves();
-      this.availableValves = response.data || [];
+      if (!testResponse.ok) {
+        throw new Error(`HTTP ${testResponse.status}: ${testResponse.statusText}`);
+      }
+
+      // Se il test funziona, carica le valvole
+      const valvesUrl = `${this.config.url.replace(/\/$/, '')}/api/valves`;
+      const valvesResponse = await fetch(valvesUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        mode: 'cors',
+        credentials: 'omit'
+      });
+
+      if (!valvesResponse.ok) {
+        throw new Error(`HTTP ${valvesResponse.status}: ${valvesResponse.statusText}`);
+      }
+
+      const valvesData = await valvesResponse.json();
+      this.availableValves = valvesData.data || [];
+      
+      console.log('Loaded valves:', this.availableValves);
       
       // Se non ci sono valvole selezionate, seleziona tutte per default
       if (!this.config.selected_valves || this.config.selected_valves.length === 0) {
@@ -163,9 +189,53 @@ export class IrrigationCardEditor extends LitElement {
       }
 
     } catch (error) {
-      console.error('Errore nel caricamento delle valvole:', error);
-      this.connectionError = `Impossibile caricare le valvole: ${error.message}`;
-      this.availableValves = [];
+      console.error('Connection test failed:', error);
+      
+      // Se HTTPS fallisce, prova HTTP
+      if (error.message.includes('Failed to fetch') && this.config.url.startsWith('https://')) {
+        try {
+          console.log('Trying HTTP fallback...');
+          const httpUrl = this.config.url.replace('https://', 'http://');
+          const auth = btoa(`${this.config.username}:${this.config.password}`);
+          
+          const httpResponse = await fetch(`${httpUrl}/api/valves`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Content-Type': 'application/json'
+            },
+            mode: 'cors',
+            credentials: 'omit'
+          });
+
+          if (!httpResponse.ok) {
+            throw new Error(`HTTP ${httpResponse.status}: ${httpResponse.statusText}`);
+          }
+
+          const httpData = await httpResponse.json();
+          this.availableValves = httpData.data || [];
+          
+          console.log('HTTP fallback successful, loaded valves:', this.availableValves);
+          
+          // Aggiorna l'URL nella configurazione per usare HTTP
+          this.config.url = httpUrl;
+          this._fireConfigChanged();
+          
+          // Se non ci sono valvole selezionate, seleziona tutte per default
+          if (!this.config.selected_valves || this.config.selected_valves.length === 0) {
+            this.config.selected_valves = this.availableValves.map(v => v.id);
+            this._fireConfigChanged();
+          }
+          
+        } catch (httpError) {
+          console.error('HTTP fallback also failed:', httpError);
+          this.connectionError = `Connessione fallita (HTTPS e HTTP): ${error.message}`;
+          this.availableValves = [];
+        }
+      } else {
+        this.connectionError = `Impossibile caricare le valvole: ${error.message}`;
+        this.availableValves = [];
+      }
     } finally {
       this.loading = false;
     }
@@ -289,6 +359,18 @@ export class IrrigationCardEditor extends LitElement {
         <div class="config-description">
           Password per l'autenticazione al backend
         </div>
+        
+        ${this.config.url && this.config.username && this.config.password ? html`
+          <button 
+            type="button"
+            class="refresh-valves-btn" 
+            @click="${this._loadAvailableValves}"
+            style="margin-top: 8px;"
+            ?disabled="${this.loading}"
+          >
+            ${this.loading ? '⏳ Testando...' : '🔗 Testa Connessione'}
+          </button>
+        ` : ''}
       </div>
 
       <div class="config-section">
