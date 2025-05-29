@@ -44,11 +44,21 @@ class IrrigationCard extends LitElement {
       refresh_interval: 30,
       show_schedule: true,
       show_system_info: true,
+      use_http_fallback: false,
+      ignore_ssl_errors: false,
       ...config
     };
 
-    // Inizializza API
-    this.api = new IrrigationAPI(this.config.url, this.config.username, this.config.password);
+    // Inizializza API con le opzioni
+    this.api = new IrrigationAPI(
+      this.config.url, 
+      this.config.username, 
+      this.config.password,
+      {
+        use_http_fallback: this.config.use_http_fallback,
+        ignore_ssl_errors: this.config.ignore_ssl_errors
+      }
+    );
 
     // Riavvia il refresh se la configurazione è cambiata
     this._setupRefresh();
@@ -67,7 +77,8 @@ class IrrigationCard extends LitElement {
       title: 'Sistema Irrigazione',
       refresh_interval: 30,
       show_schedule: true,
-      show_system_info: true
+      show_system_info: true,
+      selected_valves: [] // Inizialmente vuoto, si popola automaticamente
     };
   }
 
@@ -117,7 +128,18 @@ class IrrigationCard extends LitElement {
       console.log('Valves response:', valvesResponse);
       console.log('System response:', systemResponse);
 
-      this.valves = valvesResponse.data || [];
+      const allValves = valvesResponse.data || [];
+      
+      // Filtra le valvole in base alla selezione
+      if (this.config.selected_valves && this.config.selected_valves.length > 0) {
+        this.valves = allValves.filter(valve => 
+          this.config.selected_valves.includes(valve.id)
+        );
+      } else {
+        // Se non ci sono valvole selezionate, mostra tutte (backward compatibility)
+        this.valves = allValves;
+      }
+
       this.systemStatus = systemResponse.data || null;
       this.lastUpdate = Date.now();
       
@@ -256,6 +278,22 @@ class IrrigationCard extends LitElement {
     });
   }
 
+  _getFilterInfo() {
+    if (!this.config.selected_valves || this.config.selected_valves.length === 0) {
+      return '';
+    }
+    
+    // Se stiamo mostrando un sottoinsieme delle valvole
+    const totalValves = this.config.selected_valves.length;
+    const shownValves = this.valves.length;
+    
+    if (totalValves !== shownValves) {
+      return `(${shownValves}/${totalValves} valvole)`;
+    }
+    
+    return totalValves < 5 ? `(${totalValves} valvole)` : '';
+  }
+
   _formatLastUpdate() {
     if (!this.lastUpdate) return '';
     const date = new Date(this.lastUpdate);
@@ -284,7 +322,9 @@ class IrrigationCard extends LitElement {
 
     return html`
       <div class="card-header">
-        <h2 class="card-title">${this.config.title || 'Sistema Irrigazione'}</h2>
+        <h2 class="card-title">
+          ${this.config.title || 'Sistema Irrigazione'} ${this._getFilterInfo()}
+        </h2>
         ${this.config.show_system_info ? html`
           <div class="system-info">
             <span>
@@ -396,9 +436,12 @@ class IrrigationCard extends LitElement {
         `)}
       </div>
 
-      ${this.valves.length === 0 ? html`
+      ${this.valves.length === 0 && !this.loading ? html`
         <div class="loading">
-          <div>Nessuna valvola trovata</div>
+          ${this.config.selected_valves && this.config.selected_valves.length === 0 ? 
+            html`<div>Nessuna valvola selezionata. Configura la card per scegliere le valvole da mostrare.</div>` :
+            html`<div>Nessuna valvola trovata</div>`
+          }
         </div>
       ` : ''}
 

@@ -1,6 +1,7 @@
 {
   "name": "irrigation-card",
   "version": "1.0.0",
+  "type": "module",
   "description": "Custom Home Assistant card for irrigation system control",
   "main": "dist/irrigation-card.js",
   "scripts": {
@@ -26,8 +27,8 @@
   "homepage": "https://github.com/TUOUSERNAME/irrigation-card#readme",
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-terser": "^0.4.4",
-    "rollup": "^4.6.1"
+    "@rollup/plugin-terser": "^0.4.0",
+    "rollup": "^3.29.0"
   },
   "dependencies": {
     "lit": "^3.1.0"
